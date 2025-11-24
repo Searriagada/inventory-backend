@@ -1,0 +1,24 @@
+# Variables de entorno
+.env
+.env.local
+.env.production
+.env.staging
+
+# Dependencias
+node_modules/
+dist/
+build/
+
+# Archivos de desarrollo
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de testing con datos reales
+*.test.local.js
+coverage/
