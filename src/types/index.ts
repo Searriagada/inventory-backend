@@ -23,26 +23,27 @@ export interface AuthRequest extends Request {
 // Insumo
 export interface Insumo {
   id_insumo: number;
-  nombre_insumo: string;
-  categoria_insumo?: string;
+  nombre_insumo?: string;
+  id_categoria?: number;
   precio_insumo?: number;
   link_insumo?: string;
   status: 'activo' | 'inactivo';
   usuario?: string;
   created_at: Date;
   updated_at: Date;
+  cantidad: number;
 }
 
 export interface CreateInsumoDto {
-  nombre_insumo: string;
-  categoria_insumo?: string;
+  nombre_insumo?: string;
+  id_categoria?: number;
   precio_insumo?: number;
   link_insumo?: string;
 }
 
 export interface UpdateInsumoDto {
   nombre_insumo?: string;
-  categoria_insumo?: string;
+  id_categoria?: number;
   precio_insumo?: number;
   link_insumo?: string;
   status?: 'activo' | 'inactivo';

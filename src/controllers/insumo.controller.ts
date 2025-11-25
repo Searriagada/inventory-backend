@@ -6,7 +6,7 @@ export class InsumoController {
   async findAll(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { status } = req.query;
-      const insumos = await insumoService.findAll(status as string);
+      const insumos = await insumoService.findAll();
 
       res.json({
         success: true,
@@ -49,7 +49,7 @@ export class InsumoController {
 
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { nombre_insumo, categoria_insumo, precio_insumo, link_insumo } = req.body;
+      const { nombre_insumo, id_categoria, precio_insumo, link_insumo } = req.body;
 
       if (!nombre_insumo) {
         res.status(400).json({
@@ -62,7 +62,7 @@ export class InsumoController {
       const usuario = req.user?.username || 'system';
 
       const insumo = await insumoService.create(
-        { nombre_insumo, categoria_insumo, precio_insumo, link_insumo },
+        { nombre_insumo, id_categoria, precio_insumo, link_insumo },
         usuario
       );
 

@@ -34,7 +34,7 @@ export class StockInsumoService {
   async updateCantidad(idInsumo: number, cantidad: number, usuario: string): Promise<StockInsumo | null> {
     const query = `
       UPDATE stock_insumo 
-      SET cantidad = cantidad + $2, usuario = $3
+      SET cantidad = $2, usuario = $3
       WHERE id_insumo = $1
       RETURNING *
     `;
