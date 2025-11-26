@@ -4,22 +4,20 @@ import insumoService from '../services/insumo.service';
 
 export class InsumoController {
   async findAll(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { status } = req.query;
-      const insumos = await insumoService.findAll();
+  try {
 
-      res.json({
-        success: true,
-        data: insumos
-      });
-    } catch (error) {
-      console.error('Error en findAll insumos:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor'
-      });
-    }
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 5;
+    const search = req.query.search as string;
+    const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+
+    const resultado = await insumoService.findAll(page, limit, search, categoryId);
+    res.json({ success: true, data: resultado });
+  } catch (error) {
+    console.error('Error en findAll insumo:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
   }
+}
 
   async findById(req: AuthRequest, res: Response): Promise<void> {
     try {
