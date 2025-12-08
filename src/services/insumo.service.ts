@@ -5,7 +5,7 @@ export class InsumoService {
   // Backend - insumo.service.ts
   // services/insumo.service.ts
 
-  async findAll(page: number = 1, limit: number = 50, search?: string, categoryId?: number): Promise<{
+  async findAll(page: number = 1, limit: number = 5, search?: string, categoryId?: number): Promise<{
     items: Insumo[];
     total: number;
     pages: number;
@@ -14,7 +14,7 @@ export class InsumoService {
     const offset = (page - 1) * limit;
 
     // Contar total
-    let countQuery = 'SELECT COUNT(*) as total FROM insumo i LEFT JOIN categoria c ON i.id_categoria = c.id_categoria';
+    let countQuery = 'SELECT COUNT(*) as total FROM insumo i LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria';
     const countParams: any[] = [];
 
     if (search) {
@@ -39,7 +39,7 @@ export class InsumoService {
       s.cantidad 
     FROM insumo i 
     INNER JOIN stock_insumo s ON i.id_insumo = s.id_insumo 
-    LEFT JOIN categoria c ON i.id_categoria = c.id_categoria
+    LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria
   `;
 
     const dataParams: any[] = [];
@@ -81,7 +81,7 @@ export class InsumoService {
         s.cantidad
       FROM insumo i 
       LEFT JOIN stock_insumo s ON i.id_insumo = s.id_insumo 
-      LEFT JOIN categoria c ON i.id_categoria = c.id_categoria 
+      LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria 
       WHERE i.id_insumo = $1
     `;
     const result = await pool.query(query, [id]);

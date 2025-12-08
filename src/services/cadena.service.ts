@@ -9,21 +9,40 @@ export interface Cadena {
   created_at: Date;
   updated_at: Date;
 }
-
+export interface CadenaInsumoDto {
+  id_insumo: number;
+  cantidad: number;
+}
 export interface CreateCadenaDto {
   nombre_cadena: string;
-  precio: number;
+  insumos?: CadenaInsumoDto[];
 }
 
 export interface UpdateCadenaDto {
   nombre_cadena?: string;
   precio?: number;
   status?: 'activo' | 'inactivo';
+  insumos?: CadenaInsumoDto[];
 }
+
 
 export class CadenaService {
   async findAll(status?: string): Promise<Cadena[]> {
-    let query = 'SELECT * FROM cadena';
+    let query = `select 
+                c.id_cadena, 
+                c.nombre_cadena, 
+                sum(i.precio_insumo * cd.cantidad) as precio,
+                c.status,c.usuario, 
+                c.created_at, 
+                c.updated_at 
+                from cadena c
+                  left join costo_cadena cd on c.id_cadena = cd.id_cadena
+                  left join insumo i on cd.id_insumo = i.id_insumo
+                group by c.id_cadena, 
+                c.nombre_cadena, 
+                c.status,c.usuario, 
+                c.created_at, 
+                c.updated_at `;
     const params: string[] = [];
 
     if (status) {
@@ -37,23 +56,79 @@ export class CadenaService {
     return result.rows;
   }
 
-  async findById(id: number): Promise<Cadena | null> {
-    const query = 'SELECT * FROM cadena WHERE id_cadena = $1';
+  async findById(id: number): Promise<Cadena[]> {
+    const query = `select 
+                  c.id_cadena, 
+                  c.nombre_cadena,
+                  cd.id_insumo,
+                  i.nombre_insumo,
+                  i.precio_insumo,
+                  cd.cantidad,
+                  sum(i.precio_insumo * cd.cantidad) as total,
+                  c.status,c.usuario, 
+                  c.created_at, 
+                  c.updated_at 
+                  from cadena c
+                    left join costo_cadena cd on c.id_cadena = cd.id_cadena
+                    left join insumo i on cd.id_insumo = i.id_insumo
+                  where c.id_cadena = $1
+                  group by c.id_cadena, 
+                  c.nombre_cadena, 
+                  cd.id_insumo,
+                  i.nombre_insumo,
+                  i.precio_insumo,
+                  cd.cantidad,
+                  c.status,c.usuario, 
+                  c.created_at, 
+                  c.updated_at`;
     const result = await pool.query(query, [id]);
-    return result.rows[0] || null;
+    return result.rows;
   }
 
   async create(data: CreateCadenaDto, usuario: string): Promise<Cadena> {
-    const query = `
-      INSERT INTO cadena (nombre_cadena, precio, usuario)
-      VALUES ($1, $2, $3)
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // 1. Crear la cadena
+    const cadenaQuery = `
+      INSERT INTO cadena (nombre_cadena, usuario)
+      VALUES ($1, $2)
       RETURNING *
     `;
-    const result = await pool.query(query, [data.nombre_cadena, data.precio, usuario]);
-    return result.rows[0];
+    const cadenaResult = await client.query(cadenaQuery, [data.nombre_cadena, usuario]);
+    const cadena = cadenaResult.rows[0];
+    
+    // 2. Insertar los insumos asociados
+    if (data.insumos && data.insumos.length > 0) {
+      const insumosQuery = `
+        INSERT INTO costo_cadena (id_cadena, id_insumo, cantidad, usuario)
+        VALUES ($1, $2, $3, $4)
+      `;
+      
+      for (const insumo of data.insumos) {
+        await client.query(insumosQuery, [cadena.id_cadena, insumo.id_insumo, insumo.cantidad, usuario]);
+      }
+    }
+    
+    await client.query('COMMIT');
+    return cadena;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+}
 
   async update(id: number, data: UpdateCadenaDto, usuario: string): Promise<Cadena | null> {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+    
+    // 1. Actualizar datos básicos de la cadena
     const fields: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
@@ -61,10 +136,6 @@ export class CadenaService {
     if (data.nombre_cadena !== undefined) {
       fields.push(`nombre_cadena = $${paramIndex++}`);
       values.push(data.nombre_cadena);
-    }
-    if (data.precio !== undefined) {
-      fields.push(`precio = $${paramIndex++}`);
-      values.push(data.precio);
     }
     if (data.status !== undefined) {
       fields.push(`status = $${paramIndex++}`);
@@ -82,9 +153,41 @@ export class CadenaService {
       RETURNING *
     `;
 
-    const result = await pool.query(query, values);
-    return result.rows[0] || null;
+    const result = await client.query(query, values);
+    const cadena = result.rows[0];
+    
+    if (!cadena) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    
+    // 2. Actualizar insumos (si se enviaron)
+    if (data.insumos !== undefined) {
+      // Eliminar insumos existentes
+      await client.query('DELETE FROM costo_cadena WHERE id_cadena = $1', [id]);
+      
+      // Insertar nuevos insumos
+      if (data.insumos.length > 0) {
+        const insumosQuery = `
+          INSERT INTO costo_cadena (id_cadena, id_insumo, cantidad, usuario)
+          VALUES ($1, $2, $3, $4)
+        `;
+        
+        for (const insumo of data.insumos) {
+          await client.query(insumosQuery, [id, insumo.id_insumo, insumo.cantidad, usuario]);
+        }
+      }
+    }
+    
+    await client.query('COMMIT');
+    return cadena;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+}
 
   async delete(id: number): Promise<boolean> {
     const query = `UPDATE cadena SET status = 'inactivo' WHERE id_cadena = $1`;

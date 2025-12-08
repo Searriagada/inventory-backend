@@ -2,20 +2,50 @@ import pool from '../config/database';
 import { Producto, CreateProductoDto, UpdateProductoDto, CreateProductoInsumoDto } from '../types';
 
 export class ProductoService {
-  async findAll(status?: string): Promise<Producto[]> {
-    let query = 'SELECT * FROM producto';
-    const params: string[] = [];
+  async findAll(page: number = 1, limit: number = 50, search?: string): Promise<{
+    items: Producto[];
+    total: number;
+    pages: number;
+    page: number;
+  }> {
+    const offset = (page - 1) * limit;
+    let countQuery = "SELECT COUNT(*) as total FROM find_all_cost_product WHERE status = 'activo'";
+    const countParams: any[] = [];
 
-    if (status) {
-      query += ' WHERE status = $1';
-      params.push(status);
+    if (search) {
+      countQuery += ' WHERE i.nombre_insumo ILIKE $1';
+      countParams.push(`%${search}%`);
     }
 
-    query += ' ORDER BY nombre_producto ASC';
+     const countResult = await pool.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].total);
 
-    const result = await pool.query(query, params);
-    return result.rows;
+    // Obtener datos paginados
+    let dataQuery = "SELECT * FROM find_all_cost_product WHERE status = 'activo'";
+
+    const dataParams: any[] = [];
+    let paramIndex = 1;
+
+    if (search) {
+      dataQuery += ` WHERE nombre_producto ILIKE $${paramIndex++}`;
+      dataParams.push(`%${search}%`);
+    }
+
+    dataQuery += ` ORDER BY nombre_producto ASC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    dataParams.push(limit, offset);
+
+    const result = await pool.query(dataQuery, dataParams);
+
+    return {
+      items: result.rows,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
   }
+
+
+
 
   async findById(id: number): Promise<Producto | null> {
     const query = 'SELECT * FROM producto WHERE id_producto = $1';

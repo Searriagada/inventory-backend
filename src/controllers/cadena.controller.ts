@@ -33,15 +33,15 @@ export class CadenaController {
 
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { nombre_cadena, precio } = req.body;
+      const { nombre_cadena } = req.body;
 
-      if (!nombre_cadena || precio === undefined) {
+      if (!nombre_cadena) {
         res.status(400).json({ success: false, error: 'Nombre y precio son requeridos' });
         return;
       }
 
       const usuario = req.user?.username || 'system';
-      const cadena = await cadenaService.create({ nombre_cadena, precio }, usuario);
+      const cadena = await cadenaService.create({ nombre_cadena, insumos: req.body.insumos }, usuario);
 
       res.status(201).json({ success: true, data: cadena, message: 'Cadena creada exitosamente' });
     } catch (error) {

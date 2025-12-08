@@ -7,7 +7,7 @@ export class InsumoController {
   try {
 
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 5;
+    const limit = parseInt(req.query.limit as string) || 50;
     const search = req.query.search as string;
     const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
 

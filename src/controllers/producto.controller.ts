@@ -5,20 +5,17 @@ import productoService from '../services/producto.service';
 export class ProductoController {
   async findAll(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { status } = req.query;
-      const productos = await productoService.findAll(status as string);
-
-      res.json({
-        success: true,
-        data: productos
-      });
-    } catch (error) {
-      console.error('Error en findAll productos:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor'
-      });
-    }
+    
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 500;
+        const search = req.query.search as string;
+    
+        const resultado = await productoService.findAll(page, limit, search);
+        res.json({ success: true, data: resultado });
+      } catch (error) {
+        console.error('Error en findAll insumo:', error);
+        res.status(500).json({ success: false, error: 'Error interno del servidor' });
+      }
   }
 
   async findById(req: AuthRequest, res: Response): Promise<void> {

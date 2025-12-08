@@ -15,7 +15,7 @@ export interface UpdateCategoriaDto {
 
 export class CategoriaService {
   async findAll(status?: string): Promise<Categoria[]> {
-    let query = 'SELECT * FROM categoria';
+    let query = 'SELECT * FROM categoria_insumo';
     const params: string[] = [];
 
     query += ' ORDER BY nombre_categoria ASC';
@@ -25,14 +25,14 @@ export class CategoriaService {
   }
 
   async findById(id: number): Promise<Categoria | null> {
-    const query = 'SELECT * FROM categoria WHERE id_categoria = $1';
+    const query = 'SELECT * FROM categoria_insumo WHERE id_categoria = $1';
     const result = await pool.query(query, [id]);
     return result.rows[0] || null;
   }
 
   async create(data: CreateCategoriaDto, usuario: string): Promise<Categoria> {
     const query = `
-      INSERT INTO categoria (nombre_categoria)
+      INSERT INTO categoria_insumo (nombre_categoria)
       VALUES ($1)
       RETURNING *
     `;
@@ -42,7 +42,7 @@ export class CategoriaService {
 
   async update(id: number, data: UpdateCategoriaDto): Promise<Categoria | null> {
     const query = `
-      UPDATE categoria 
+      UPDATE categoria_insumo 
       SET nombre_categoria = $2
       WHERE id_categoria = $1
       RETURNING *
