@@ -11,6 +11,7 @@ import clienteRoutes from './cliente.routes';
 import ventaRoutes from './venta.routes';
 import costoProductoRoutes from './costo-producto.routes';
 import categoriaRoutes from './categoria-routes';
+import tipoProductoRoutes from './tipo-producto-routes';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/clientes', clienteRoutes);
 router.use('/ventas', ventaRoutes);
 router.use('/costos', costoProductoRoutes);
 router.use('/categoria', categoriaRoutes);
+router.use('/tipo-producto', tipoProductoRoutes);
 
 export default router;

@@ -44,9 +44,6 @@ export class ProductoService {
     };
   }
 
-
-
-
   async findById(id: number): Promise<Producto | null> {
     const query = 'SELECT * FROM producto WHERE id_producto = $1';
     const result = await pool.query(query, [id]);
