@@ -9,8 +9,9 @@ export class ProductoController {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 500;
         const search = req.query.search as string;
+        const tipoProducto = req.query.tipoProducto ? parseInt(req.query.tipoProducto as string) : undefined;
     
-        const resultado = await productoService.findAll(page, limit, search);
+        const resultado = await productoService.findAll(page, limit, search, tipoProducto);
         res.json({ success: true, data: resultado });
       } catch (error) {
         console.error('Error en findAll insumo:', error);
