@@ -1,5 +1,5 @@
 import pool from '../config/database';
-import { Producto, CreateProductoDto, UpdateProductoDto, CreateProductoInsumoDto, Insumo } from '../types';
+import { Producto, CreateProductoDto, UpdateProductoDto, CreateProductoInsumoDto, Insumo, ProductoInsumo } from '../types';
 
 export class ProductoService {
   async findAll(page: number = 1, limit: number = 50, search?: string, tipoProducto?: number): Promise<{
@@ -210,31 +210,45 @@ export class ProductoService {
     return result.rows;
   }
 
-  async addInsumo(
-    idProducto: number,
-    data: CreateProductoInsumoDto,
-    usuario: string
-  ): Promise<any> {
-    const query = `
-      INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, neto, iva, total, usuario)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT (id_producto, id_insumo) 
-      DO UPDATE SET cantidad = $3, neto = $4, iva = $5, total = $6, usuario = $7
-      RETURNING *
-    `;
+async addInsumos(
+  idProducto: number,
+  insumos: { id_insumo: number; cantidad: number }[],
+  usuario: string
+): Promise<any> {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
 
-    const result = await pool.query(query, [
-      idProducto,
-      data.id_insumo,
-      data.cantidad,
-      data.neto || null,
-      data.iva || null,
-      data.total || null,
-      usuario
-    ]);
+    // 1. Eliminar insumos existentes
+    await client.query(
+      'DELETE FROM producto_insumo WHERE id_producto = $1',
+      [idProducto]
+    );
 
-    return result.rows[0];
+    // 2. Insertar nuevos insumos
+    const resultados = [];
+    if (insumos.length > 0) {
+      for (const insumo of insumos) {
+        const result = await client.query(
+          `INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
+           VALUES ($1, $2, $3, $4)
+           RETURNING *`,
+          [idProducto, insumo.id_insumo, insumo.cantidad, usuario]
+        );
+        resultados.push(result.rows[0]);
+      }
+    }
+
+    await client.query('COMMIT');
+    return resultados;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
+}
 
   async removeInsumo(idProducto: number, idInsumo: number): Promise<boolean> {
     const query = `
@@ -245,7 +259,7 @@ export class ProductoService {
     return (result.rowCount ?? 0) > 0;
   }
 
-    async togglePublicadoML(id: number, usuario: string): Promise<Producto | null> {
+  async togglePublicadoML(id: number, usuario: string): Promise<Producto | null> {
     const query = `
       UPDATE producto 
       SET publicado_ml = CASE 
@@ -274,7 +288,7 @@ export class ProductoService {
     const result = await pool.query(query, [id, publicado_ml, usuario]);
     return result.rows[0] || null;
   }
-  
+
 }
 
 

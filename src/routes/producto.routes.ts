@@ -17,7 +17,6 @@ router.put('/:id/publicado-ml', productoController.updatePublicadoML);
 
 // Insumos del producto
 router.get('/:id/insumos', productoController.getInsumos);
-router.post('/:id/insumos', productoController.addInsumo);
-router.delete('/:id/insumos/:idInsumo', productoController.removeInsumo);
+router.put('/:id/insumos', productoController.addInsumos);
 
 export default router;

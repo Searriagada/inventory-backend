@@ -148,38 +148,31 @@ export class ProductoController {
     }
   }
 
-  async addInsumo(req: AuthRequest, res: Response): Promise<void> {
+  async addInsumos(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { id_insumo, cantidad, neto, iva, total } = req.body;
+      const { insumos } = req.body; 
 
-      if (!id_insumo || cantidad === undefined) {
+      // Validar que sea un array
+      if (!Array.isArray(insumos)) {
         res.status(400).json({
           success: false,
-          error: 'ID de insumo y cantidad son requeridos'
+          error: 'Se esperaba un array de insumos'
         });
         return;
       }
 
       const usuario = req.user?.username || 'system';
+      const productoInsumo = await productoService.addInsumos(Number(id), insumos, usuario);
 
-      const productoInsumo = await productoService.addInsumo(
-        Number(id),
-        { id_insumo, cantidad, neto, iva, total },
-        usuario
-      );
-
-      res.status(201).json({
+      res.json({
         success: true,
         data: productoInsumo,
-        message: 'Insumo agregado al producto exitosamente'
+        message: 'Insumos actualizados exitosamente'
       });
     } catch (error) {
-      console.error('Error en addInsumo:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor'
-      });
+      console.error('Error en addInsumos:', error);
+      res.status(500).json({ success: false, error: 'Error interno del servidor' });
     }
   }
 
