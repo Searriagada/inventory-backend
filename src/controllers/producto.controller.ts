@@ -5,18 +5,18 @@ import productoService from '../services/producto.service';
 export class ProductoController {
   async findAll(req: AuthRequest, res: Response): Promise<void> {
     try {
-    
-        const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 500;
-        const search = req.query.search as string;
-        const tipoProducto = req.query.tipoProducto ? parseInt(req.query.tipoProducto as string) : undefined;
-    
-        const resultado = await productoService.findAll(page, limit, search, tipoProducto);
-        res.json({ success: true, data: resultado });
-      } catch (error) {
-        console.error('Error en findAll insumo:', error);
-        res.status(500).json({ success: false, error: 'Error interno del servidor' });
-      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 500;
+      const search = req.query.search as string;
+      const tipoProducto = req.query.tipoProducto ? parseInt(req.query.tipoProducto as string) : undefined;
+
+      const resultado = await productoService.findAll(page, limit, search, tipoProducto);
+      res.json({ success: true, data: resultado });
+    } catch (error) {
+      console.error('Error en findAll insumo:', error);
+      res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    }
   }
 
   async findById(req: AuthRequest, res: Response): Promise<void> {
@@ -128,31 +128,6 @@ export class ProductoController {
     }
   }
 
-  async delete(req: AuthRequest, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
-      const deleted = await productoService.delete(Number(id));
-
-      if (!deleted) {
-        res.status(404).json({
-          success: false,
-          error: 'Producto no encontrado'
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        message: 'Producto eliminado exitosamente'
-      });
-    } catch (error) {
-      console.error('Error en delete producto:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Error interno del servidor'
-      });
-    }
-  }
 
   // Insumos del producto
   async getInsumos(req: AuthRequest, res: Response): Promise<void> {
@@ -233,6 +208,57 @@ export class ProductoController {
       });
     }
   }
+  async togglePublicadoML(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id, idProducto } = req.params;
+      const usuario = (req as any).user?.username || 'sistema';
+
+      const producto = await productoService.togglePublicadoML(Number(id), usuario);
+
+      if (!producto) {
+        res.status(404).json({ error: 'Producto no encontrado' });
+        return;
+      }
+
+      res.json({
+        message: 'Estado publicado_ml actualizado',
+        data: producto
+      });
+    } catch (error) {
+      console.error('Error al actualizar publicado_ml:', error);
+      res.status(500).json({ error: 'Error al actualizar el estado' });
+    }
+  }
+
+
+  async updatePublicadoML(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { publicado_ml } = req.body;
+      const usuario = (req as any).user?.username || 'sistema';
+
+      if (!publicado_ml || !['si', 'no'].includes(publicado_ml)) {
+        res.status(400).json({ error: 'publicado_ml debe ser "si" o "no"' });
+        return;
+      }
+
+      const producto = await productoService.updatePublicadoML(Number(id), publicado_ml, usuario);
+
+      if (!producto) {
+        res.status(404).json({ error: 'Producto no encontrado' });
+        return;
+      }
+
+      res.json({
+        message: 'Producto actualizado',
+        data: producto
+      });
+    } catch (error) {
+      console.error('Error al actualizar publicado_ml:', error);
+      res.status(500).json({ error: 'Error al actualizar el producto' });
+    }
+  }
+
 }
 
 export default new ProductoController();

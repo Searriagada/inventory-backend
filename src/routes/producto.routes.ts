@@ -11,7 +11,9 @@ router.get('/', productoController.findAll);
 router.get('/:id', productoController.findById);
 router.post('/', productoController.create);
 router.put('/:id', productoController.update);
-router.delete('/:id', productoController.delete);
+router.patch('/:id/toggle-publicado-ml', productoController.togglePublicadoML);
+router.put('/:id/publicado-ml', productoController.updatePublicadoML);
+
 
 // Insumos del producto
 router.get('/:id/insumos', productoController.getInsumos);
