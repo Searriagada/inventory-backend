@@ -72,7 +72,7 @@ export class ProductoService {
     try {
       await client.query('BEGIN');
 
-      // 1. Crear el producto
+      // Crear el producto
       const productoQuery = `
       INSERT INTO producto (sku, nombre_producto, descripcion, precio_venta, usuario)
       VALUES ($1, $2, $3, $4, $5)
@@ -87,7 +87,7 @@ export class ProductoService {
       ]);
       const producto = productoResult.rows[0];
 
-      // 2. Insertar los insumos asociados
+      // Insertar los insumos asociados
       if (data.insumos && data.insumos.length > 0) {
         const insumosQuery = `
         INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
@@ -115,7 +115,7 @@ export class ProductoService {
     try {
       await client.query('BEGIN');
 
-      // 1. Actualizar datos básicos del producto
+      // Actualizar datos básicos del producto
       const fields: string[] = [];
       const values: any[] = [];
       let paramIndex = 1;
@@ -160,7 +160,7 @@ export class ProductoService {
         return null;
       }
 
-      // 2. Actualizar insumos (si se enviaron)
+      // Actualizar insumos (si se enviaron)
       if (data.insumos !== undefined) {
         // Eliminar insumos existentes
         await client.query('DELETE FROM producto_insumo WHERE id_producto = $1', [id]);
@@ -189,7 +189,7 @@ export class ProductoService {
   }
 
   // Insumos del producto
-  async getInsumos(idProducto: number): Promise<any[]> {
+  async getInsumos(idProducto: number): Promise<any> {
     const query =
       `SELECT 
         p.sku,
@@ -207,7 +207,22 @@ export class ProductoService {
       WHERE pi.id_producto = $1
     `;
     const result = await pool.query(query, [idProducto]);
-    return result.rows;
+
+    if (result.rowCount === 0) {
+      return [];
+    }
+
+    //Enviar datos filtrados
+    const listaInsumos = result.rows.map(row => ({
+      id_insumo: row.id_insumo,
+      nombre_insumo: row.nombre_insumo,
+      id_categoria: row.id_categoria,
+      precio_insumo: row.precio_insumo,
+      status: row.status,
+      cantidad: row.cantidad,
+      subtotal: row.precio_insumo * row.cantidad
+    }));
+    return listaInsumos;
   }
 
   async addInsumo(
