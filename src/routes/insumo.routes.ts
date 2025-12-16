@@ -7,6 +7,8 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/', insumoController.findAll);
+router.get('/manufacturing', insumoController.findAllManufacturing);
+router.get('/packaging', insumoController.findAllPackaging);
 router.get('/:id', insumoController.findById);
 router.post('/', insumoController.create);
 router.put('/:id', insumoController.update);

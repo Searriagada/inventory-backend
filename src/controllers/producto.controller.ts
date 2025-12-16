@@ -133,7 +133,7 @@ export class ProductoController {
   async getInsumos(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const insumos = await productoService.getInsumos(Number(id));
+      const insumos = await productoService.getInsumosFabricacion(Number(id));
 
       res.json({
         success: true,
@@ -151,9 +151,9 @@ export class ProductoController {
   async addInsumos(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { insumos } = req.body; 
+      const { insumos, id_cadena } = req.body;
 
-      // Validar que sea un array
+      // Validar que insumos sea un array
       if (!Array.isArray(insumos)) {
         res.status(400).json({
           success: false,
@@ -163,12 +163,21 @@ export class ProductoController {
       }
 
       const usuario = req.user?.username || 'system';
-      const productoInsumo = await productoService.addInsumos(Number(id), insumos, usuario);
+      
+      // Pasar id_cadena al servicio (puede ser null si no se envía)
+      const idCadena = id_cadena !== undefined ? id_cadena : null;
+      
+      const productoInsumo = await productoService.addInsumos(
+        Number(id),
+        insumos,
+        idCadena,
+        usuario
+      );
 
       res.json({
         success: true,
         data: productoInsumo,
-        message: 'Insumos actualizados exitosamente'
+        message: 'Insumos y cadena actualizados exitosamente'
       });
     } catch (error) {
       console.error('Error en addInsumos:', error);

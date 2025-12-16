@@ -19,6 +19,37 @@ export class InsumoController {
   }
 }
 
+ async findAllManufacturing(req: AuthRequest, res: Response): Promise<void> {
+  try {
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const search = req.query.search as string;
+    const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+
+    const resultado = await insumoService.findAllManufacturing(page, limit, search, categoryId);
+    res.json({ success: true, data: resultado });
+  } catch (error) {
+    console.error('Error en findAll insumo:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+ async findAllPackaging(req: AuthRequest, res: Response): Promise<void> {
+  try {
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const search = req.query.search as string;
+    const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+
+    const resultado = await insumoService.findAllPackaging(page, limit, search, categoryId);
+    res.json({ success: true, data: resultado });
+  } catch (error) {
+    console.error('Error en findAll insumo:', error);
+    res.status(500).json({ success: false, error: 'Error interno del servidor' });
+  }
+}
+
   async findById(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;

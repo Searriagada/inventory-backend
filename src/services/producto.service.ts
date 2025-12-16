@@ -11,7 +11,8 @@ export class ProductoService {
     const offset = (page - 1) * limit;
 
     // Contar total
-    let countQuery = "SELECT COUNT(*) as total FROM find_all_cost_product WHERE status = 'activo'";
+    let countQuery = `SELECT COUNT(*) as total FROM producto
+          WHERE status = 'activo'`;
     const countParams: any[] = [];
     let countParamIndex = 1;
 
@@ -28,10 +29,38 @@ export class ProductoService {
     const total = parseInt(countResult.rows[0].total);
 
     // Obtener datos paginados
-    let dataQuery = "SELECT * FROM find_all_cost_product WHERE status = 'activo'";
+    let dataQuery = `SELECT 
+          p.id_producto,
+          p.sku,
+          p.nombre_producto,
+          tp.nombre_tipo_producto,
+          p.id_cadena,
+          sp.cantidad AS stock_actual,
+          COALESCE(cadena_costos.total, 0) AS valor_cadena,
+          (COALESCE(cadena_costos.total, 0) + COALESCE(joya_costos.total, 0)) AS joya,
+          p.precio_venta,
+          p.publicado_ml,
+          p.status
+      FROM producto p
+      LEFT JOIN stock_producto sp ON p.id_producto = sp.id_producto
+      LEFT JOIN tipo_producto tp ON p.id_tipo = tp.id_tipo
+      -- Precalcular costos de cadena (suma de insumos de la cadena)
+      LEFT JOIN (
+          SELECT cc.id_cadena, SUM(i.precio_insumo * cc.cantidad) AS total
+          FROM costo_cadena cc
+          INNER JOIN insumo i ON cc.id_insumo = i.id_insumo
+          GROUP BY cc.id_cadena
+      ) cadena_costos ON p.id_cadena = cadena_costos.id_cadena
+      -- Precalcular costos de joya (suma de insumos del producto)
+      LEFT JOIN (
+          SELECT pi.id_producto, SUM(pi.cantidad * i.precio_insumo) AS total
+          FROM producto_insumo pi
+          INNER JOIN insumo i ON pi.id_insumo = i.id_insumo
+          GROUP BY pi.id_producto
+      ) joya_costos ON p.id_producto = joya_costos.id_producto
+    WHERE status = 'activo'`;
     const dataParams: any[] = [];
     let paramIndex = 1;
-    console.log('Query ejecutada:', dataQuery, 'con parámetros:', dataParams);
     if (search) {
       dataQuery += ` AND nombre_producto ILIKE $${paramIndex++}`;
       dataParams.push(`%${search}%`);
@@ -189,7 +218,7 @@ export class ProductoService {
   }
 
   // Insumos del producto
-  async getInsumos(idProducto: number): Promise<any> {
+  async getInsumosFabricacion(idProducto: number): Promise<any> {
     const query =
       `SELECT 
         p.sku,
@@ -204,7 +233,7 @@ export class ProductoService {
     from producto p 
     INNER JOIN producto_insumo pi ON p.id_producto = pi.id_producto
     LEFT JOIN insumo i ON pi.id_insumo = i.id_insumo
-      WHERE pi.id_producto = $1
+    WHERE pi.id_producto = $1
     `;
     const result = await pool.query(query, [idProducto]);
 
@@ -220,50 +249,58 @@ export class ProductoService {
       precio_insumo: row.precio_insumo,
       status: row.status,
       cantidad: row.cantidad,
-      subtotal: row.precio_insumo * row.cantidad
+      subtotal: row.precio_insumo * row.cantidad,
+      categoria_insumo: row.nombre_categoria
     }));
     return listaInsumos;
   }
 
-async addInsumos(
-  idProducto: number,
-  insumos: { id_insumo: number; cantidad: number }[],
-  usuario: string
-): Promise<any> {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
+  async addInsumos(
+    idProducto: number,
+    insumos: { id_insumo: number; cantidad: number }[],
+    idCadena: number | null,
+    usuario: string
+  ): Promise<any> {
+    const client = await pool.connect();
 
-    // 1. Eliminar insumos existentes
-    await client.query(
-      'DELETE FROM producto_insumo WHERE id_producto = $1',
-      [idProducto]
-    );
+    try {
+      await client.query('BEGIN');
 
-    // 2. Insertar nuevos insumos
-    const resultados = [];
-    if (insumos.length > 0) {
-      for (const insumo of insumos) {
-        const result = await client.query(
-          `INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
+      // 1. Actualizar id_cadena en el producto
+      await client.query(
+        'UPDATE producto SET id_cadena = $1, usuario = $2 WHERE id_producto = $3',
+        [idCadena, usuario, idProducto]
+      );
+
+      // 2. Eliminar insumos existentes
+      await client.query(
+        'DELETE FROM producto_insumo WHERE id_producto = $1',
+        [idProducto]
+      );
+
+      // 3. Insertar nuevos insumos
+      const resultados = [];
+      if (insumos.length > 0) {
+        for (const insumo of insumos) {
+          const result = await client.query(
+            `INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [idProducto, insumo.id_insumo, insumo.cantidad, usuario]
-        );
-        resultados.push(result.rows[0]);
+            [idProducto, insumo.id_insumo, insumo.cantidad, usuario]
+          );
+          resultados.push(result.rows[0]);
+        }
       }
-    }
 
-    await client.query('COMMIT');
-    return resultados;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+      await client.query('COMMIT');
+      return resultados;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
-}
 
   async removeInsumo(idProducto: number, idInsumo: number): Promise<boolean> {
     const query = `
@@ -305,7 +342,5 @@ async addInsumos(
   }
 
 }
-
-
 
 export default new ProductoService();

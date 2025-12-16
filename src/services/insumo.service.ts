@@ -68,6 +68,138 @@ export class InsumoService {
     };
   }
 
+  async findAllManufacturing(page: number = 1, limit: number = 5, search?: string, categoryId?: number): Promise<{
+    items: Insumo[];
+    total: number;
+    pages: number;
+    page: number;
+  }> {
+    const offset = (page - 1) * limit;
+
+    // Contar total EXCEPTO EMPAQUE
+    let countQuery = `SELECT COUNT(*) as total FROM insumo i 
+        LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria
+        WHERE c.nombre_categoria NOT LIKE 'EMPAQUE'
+        `;
+    const countParams: any[] = [];
+
+    if (search) {
+      countQuery += ' WHERE i.nombre_insumo ILIKE $1';
+      countParams.push(`%${search}%`);
+    }
+
+
+    const countResult = await pool.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Obtener datos paginados EXCEPTO EMPAQUE
+    let dataQuery = `
+    SELECT 
+      i.id_insumo, 
+      i.nombre_insumo, 
+      i.id_categoria, 
+      c.nombre_categoria, 
+      i.precio_insumo, 
+      i.link_insumo, 
+      i.status, 
+      s.cantidad 
+    FROM insumo i 
+    INNER JOIN stock_insumo s ON i.id_insumo = s.id_insumo 
+    LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria
+    WHERE c.nombre_categoria NOT LIKE 'EMPAQUE'
+  `;
+
+    const dataParams: any[] = [];
+    let paramIndex = 1;
+
+    if (search) {
+      dataQuery += ` AND i.nombre_insumo ILIKE $${paramIndex++}`;
+      dataParams.push(`%${search}%`);
+    }
+    if (categoryId) {
+      const operator = search ? 'AND' : 'WHERE';
+      dataQuery += ` ${operator} i.id_categoria = $${paramIndex++}`;
+      dataParams.push(categoryId);
+    }
+
+    dataQuery += ` ORDER BY i.nombre_insumo ASC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    dataParams.push(limit, offset);
+
+    const result = await pool.query(dataQuery, dataParams);
+
+    return {
+      items: result.rows,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
+  }
+  async findAllPackaging(page: number = 1, limit: number = 5, search?: string, categoryId?: number): Promise<{
+    items: Insumo[];
+    total: number;
+    pages: number;
+    page: number;
+  }> {
+    const offset = (page - 1) * limit;
+
+    // Contar total EXCEPTO EMPAQUE
+    let countQuery = `SELECT COUNT(*) as total FROM insumo i 
+        LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria
+        WHERE c.nombre_categoria NOT LIKE 'EMPAQUE'
+        `;
+    const countParams: any[] = [];
+
+    if (search) {
+      countQuery += ' WHERE i.nombre_insumo ILIKE $1';
+      countParams.push(`%${search}%`);
+    }
+
+
+    const countResult = await pool.query(countQuery, countParams);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Obtener datos paginados EXCEPTO EMPAQUE
+    let dataQuery = `
+    SELECT 
+      i.id_insumo, 
+      i.nombre_insumo, 
+      i.id_categoria, 
+      c.nombre_categoria, 
+      i.precio_insumo, 
+      i.link_insumo, 
+      i.status, 
+      s.cantidad 
+    FROM insumo i 
+    INNER JOIN stock_insumo s ON i.id_insumo = s.id_insumo 
+    LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria
+    WHERE c.nombre_categoria NOT LIKE 'EMPAQUE'
+  `;
+
+    const dataParams: any[] = [];
+    let paramIndex = 1;
+
+    if (search) {
+      dataQuery += ` AND i.nombre_insumo ILIKE $${paramIndex++}`;
+      dataParams.push(`%${search}%`);
+    }
+    if (categoryId) {
+      const operator = search ? 'AND' : 'WHERE';
+      dataQuery += ` ${operator} i.id_categoria = $${paramIndex++}`;
+      dataParams.push(categoryId);
+    }
+
+    dataQuery += ` ORDER BY i.nombre_insumo ASC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    dataParams.push(limit, offset);
+
+    const result = await pool.query(dataQuery, dataParams);
+
+    return {
+      items: result.rows,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+    };
+  }
   async findById(id: number): Promise<Insumo | null> {
     const query = `
       SELECT 
