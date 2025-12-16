@@ -29,36 +29,54 @@ export class ProductoService {
     const total = parseInt(countResult.rows[0].total);
 
     // Obtener datos paginados
-    let dataQuery = `SELECT 
-          p.id_producto,
-          p.sku,
-          p.nombre_producto,
-          tp.nombre_tipo_producto,
-          p.id_cadena,
-          sp.cantidad AS stock_actual,
-          COALESCE(cadena_costos.total, 0) AS valor_cadena,
-          (COALESCE(cadena_costos.total, 0) + COALESCE(joya_costos.total, 0)) AS joya,
-          p.precio_venta,
-          p.publicado_ml,
-          p.status
-      FROM producto p
-      LEFT JOIN stock_producto sp ON p.id_producto = sp.id_producto
-      LEFT JOIN tipo_producto tp ON p.id_tipo = tp.id_tipo
-      -- Precalcular costos de cadena (suma de insumos de la cadena)
-      LEFT JOIN (
-          SELECT cc.id_cadena, SUM(i.precio_insumo * cc.cantidad) AS total
-          FROM costo_cadena cc
-          INNER JOIN insumo i ON cc.id_insumo = i.id_insumo
-          GROUP BY cc.id_cadena
-      ) cadena_costos ON p.id_cadena = cadena_costos.id_cadena
-      -- Precalcular costos de joya (suma de insumos del producto)
-      LEFT JOIN (
-          SELECT pi.id_producto, SUM(pi.cantidad * i.precio_insumo) AS total
-          FROM producto_insumo pi
-          INNER JOIN insumo i ON pi.id_insumo = i.id_insumo
-          GROUP BY pi.id_producto
-      ) joya_costos ON p.id_producto = joya_costos.id_producto
-    WHERE status = 'activo'`;
+    let dataQuery = `WITH costos_cadena AS (
+                    -- Calcular el costo cadena
+                    SELECT 
+                        cc.id_cadena, 
+                        SUM(i.precio_insumo * cc.cantidad) AS total
+                    FROM costo_cadena cc
+                    INNER JOIN insumo i ON cc.id_insumo = i.id_insumo
+                    GROUP BY cc.id_cadena
+                ),
+                costos_insumos_mixtos AS (
+                    -- Calculamos joya y empaque
+                    SELECT 
+                        pi.id_producto, 
+                        -- Si no es empaque, suma al costo de joya
+                        SUM(CASE 
+                            WHEN ci.nombre_categoria NOT LIKE '%EMPAQUE%' THEN pi.cantidad * i.precio_insumo 
+                            ELSE 0 
+                        END) AS costo_materiales,
+                        -- Si es empaque, suma al costo de embalaje
+                        SUM(CASE 
+                            WHEN ci.nombre_categoria LIKE '%EMPAQUE%' THEN pi.cantidad * i.precio_insumo 
+                            ELSE 0 
+                        END) AS costo_embalaje
+                    FROM producto_insumo pi
+                    INNER JOIN insumo i ON pi.id_insumo = i.id_insumo
+                    LEFT JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
+                    GROUP BY pi.id_producto
+                )
+                SELECT 
+                    p.id_producto,
+                    p.sku,
+                    p.nombre_producto,
+                    tp.nombre_tipo_producto,
+                    p.id_cadena,
+                    sp.cantidad AS stock_actual,
+                    -- Cálculos finales limpios
+                    COALESCE(cc.total, 0) AS valor_cadena,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0)) AS joya,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cim.costo_embalaje, 0)) AS costo_total,
+                    p.precio_venta,
+                    p.publicado_ml,
+                    p.status
+                FROM producto p
+                LEFT JOIN stock_producto sp ON p.id_producto = sp.id_producto
+                LEFT JOIN tipo_producto tp ON p.id_tipo = tp.id_tipo
+                LEFT JOIN costos_cadena cc ON p.id_cadena = cc.id_cadena
+                LEFT JOIN costos_insumos_mixtos cim ON p.id_producto = cim.id_producto
+                WHERE p.status = 'activo'`;
     const dataParams: any[] = [];
     let paramIndex = 1;
     if (search) {
@@ -189,24 +207,6 @@ export class ProductoService {
         return null;
       }
 
-      // Actualizar insumos (si se enviaron)
-      if (data.insumos !== undefined) {
-        // Eliminar insumos existentes
-        await client.query('DELETE FROM producto_insumo WHERE id_producto = $1', [id]);
-
-        // Insertar nuevos insumos
-        if (data.insumos.length > 0) {
-          const insumosQuery = `
-          INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
-          VALUES ($1, $2, $3, $4)
-        `;
-
-          for (const insumo of data.insumos) {
-            await client.query(insumosQuery, [id, insumo.id_insumo, insumo.cantidad, usuario]);
-          }
-        }
-      }
-
       await client.query('COMMIT');
       return producto;
     } catch (error) {
@@ -233,7 +233,46 @@ export class ProductoService {
     from producto p 
     INNER JOIN producto_insumo pi ON p.id_producto = pi.id_producto
     LEFT JOIN insumo i ON pi.id_insumo = i.id_insumo
-    WHERE pi.id_producto = $1
+    LEFT JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
+    WHERE pi.id_producto = $1 AND ci.nombre_categoria NOT LIKE 'EMPAQUE'
+    `;
+    const result = await pool.query(query, [idProducto]);
+
+    if (result.rowCount === 0) {
+      return [];
+    }
+
+    //Enviar datos filtrados
+    const listaInsumos = result.rows.map(row => ({
+      id_insumo: row.id_insumo,
+      nombre_insumo: row.nombre_insumo,
+      id_categoria: row.id_categoria,
+      precio_insumo: row.precio_insumo,
+      status: row.status,
+      cantidad: row.cantidad,
+      subtotal: row.precio_insumo * row.cantidad,
+      categoria_insumo: row.nombre_categoria
+    }));
+    return listaInsumos;
+  }
+
+  async getInsumosEmbalaje(idProducto: number): Promise<any> {
+    const query =
+      `SELECT 
+        p.sku,
+        P.nombre_producto,
+        i.id_insumo, 
+        i.nombre_insumo, 
+        i.id_categoria, 
+        i.precio_insumo, 
+        i.link_insumo, 
+        i.status,
+        pi.cantidad
+    from producto p 
+    INNER JOIN producto_insumo pi ON p.id_producto = pi.id_producto
+    LEFT JOIN insumo i ON pi.id_insumo = i.id_insumo
+    LEFT JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
+    WHERE pi.id_producto = $1 AND ci.nombre_categoria LIKE 'EMPAQUE'
     `;
     const result = await pool.query(query, [idProducto]);
 
@@ -266,36 +305,86 @@ export class ProductoService {
     try {
       await client.query('BEGIN');
 
-      // 1. Actualizar id_cadena en el producto
       await client.query(
         'UPDATE producto SET id_cadena = $1, usuario = $2 WHERE id_producto = $3',
         [idCadena, usuario, idProducto]
       );
 
-      // 2. Eliminar insumos existentes
       await client.query(
-        'DELETE FROM producto_insumo WHERE id_producto = $1',
+        `DELETE FROM producto_insumo 
+             WHERE id_producto = $1 AND id_insumo IN(
+                SELECT i.id_insumo FROM insumo i
+                INNER JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
+                WHERE ci.nombre_categoria NOT LIKE 'EMPAQUE'
+             )`,
         [idProducto]
       );
 
-      // 3. Insertar nuevos insumos
-      const resultados = [];
-      if (insumos.length > 0) {
-        for (const insumo of insumos) {
-          const result = await client.query(
-            `INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
-           VALUES ($1, $2, $3, $4)
-           RETURNING *`,
-            [idProducto, insumo.id_insumo, insumo.cantidad, usuario]
-          );
-          resultados.push(result.rows[0]);
-        }
-      }
+      const insertPromises = insumos.map(insumo => {
+        return client.query(
+          `INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (id_producto, id_insumo) 
+                 DO UPDATE SET cantidad = EXCLUDED.cantidad, usuario = EXCLUDED.usuario
+                 RETURNING *`,
+          [idProducto, insumo.id_insumo, insumo.cantidad, usuario]
+        );
+      });
+
+      const resultadosQuery = await Promise.all(insertPromises);
+      const resultados = resultadosQuery.map(r => r.rows[0]);
+
+      await client.query('COMMIT');
+      return resultados;
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Error en transacción:', error);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async addEmbalaje(
+    idProducto: number,
+    insumos: { id_insumo: number; cantidad: number }[],
+    usuario: string
+  ): Promise<any> {
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      await client.query(
+        `DELETE FROM producto_insumo 
+             WHERE id_producto = $1 AND id_insumo IN (
+                SELECT i.id_insumo FROM insumo i
+                INNER JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
+                WHERE ci.nombre_categoria LIKE 'EMPAQUE'
+             )`,
+        [idProducto]
+      );
+
+      const insertPromises = insumos.map(insumo => {
+        return client.query(
+          `INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (id_producto, id_insumo) 
+                 DO UPDATE SET cantidad = EXCLUDED.cantidad, usuario = EXCLUDED.usuario
+                 RETURNING *`,
+          [idProducto, insumo.id_insumo, insumo.cantidad, usuario]
+        );
+      });
+
+      const resultadosQuery = await Promise.all(insertPromises);
+      const resultados = resultadosQuery.map(r => r.rows[0]);
 
       await client.query('COMMIT');
       return resultados;
     } catch (error) {
       await client.query('ROLLBACK');
+      console.error('Error en addEmbalaje:', error);
       throw error;
     } finally {
       client.release();

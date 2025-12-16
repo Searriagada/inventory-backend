@@ -148,6 +148,24 @@ export class ProductoController {
     }
   }
 
+    async getEmbalaje(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const insumos = await productoService.getInsumosEmbalaje(Number(id));
+
+      res.json({
+        success: true,
+        data: insumos
+      });
+    } catch (error) {
+      console.error('Error en getInsumos:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor'
+      });
+    }
+  }
+
   async addInsumos(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -171,6 +189,39 @@ export class ProductoController {
         Number(id),
         insumos,
         idCadena,
+        usuario
+      );
+
+      res.json({
+        success: true,
+        data: productoInsumo,
+        message: 'Insumos y cadena actualizados exitosamente'
+      });
+    } catch (error) {
+      console.error('Error en addInsumos:', error);
+      res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    }
+  }
+
+    async addEmbalaje(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { insumos } = req.body;
+
+      // Validar que insumos sea un array
+      if (!Array.isArray(insumos)) {
+        res.status(400).json({
+          success: false,
+          error: 'Se esperaba un array de insumos'
+        });
+        return;
+      }
+
+      const usuario = req.user?.username || 'system';
+      
+      const productoInsumo = await productoService.addEmbalaje(
+        Number(id),
+        insumos,
         usuario
       );
 

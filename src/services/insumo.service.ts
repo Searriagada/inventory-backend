@@ -145,7 +145,7 @@ export class InsumoService {
     // Contar total EXCEPTO EMPAQUE
     let countQuery = `SELECT COUNT(*) as total FROM insumo i 
         LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria
-        WHERE c.nombre_categoria NOT LIKE 'EMPAQUE'
+        WHERE c.nombre_categoria LIKE 'EMPAQUE'
         `;
     const countParams: any[] = [];
 
@@ -172,7 +172,7 @@ export class InsumoService {
     FROM insumo i 
     INNER JOIN stock_insumo s ON i.id_insumo = s.id_insumo 
     LEFT JOIN categoria_insumo c ON i.id_categoria = c.id_categoria
-    WHERE c.nombre_categoria NOT LIKE 'EMPAQUE'
+    WHERE c.nombre_categoria LIKE 'EMPAQUE'
   `;
 
     const dataParams: any[] = [];
