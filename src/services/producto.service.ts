@@ -430,6 +430,102 @@ export class ProductoService {
     return result.rows[0] || null;
   }
 
+  
+// Costos y valor de venta
+   async getCostoVenta(idProducto: number): Promise<any> {
+    const query =
+      `
+      WITH costos_cadena AS (
+                    -- Calcular el costo cadena
+                    SELECT 
+                        cc.id_cadena, 
+                        SUM(i.precio_insumo * cc.cantidad) AS total
+                    FROM costo_cadena cc
+                    INNER JOIN insumo i ON cc.id_insumo = i.id_insumo
+                    GROUP BY cc.id_cadena
+                ),
+                costos_insumos_mixtos AS (
+                    -- Calculamos joya y empaque
+                    SELECT 
+                        pi.id_producto, 
+                        -- Si no es empaque, suma al costo de joya
+                        SUM(CASE 
+                            WHEN ci.nombre_categoria NOT LIKE '%EMPAQUE%' THEN pi.cantidad * i.precio_insumo 
+                            ELSE 0 
+                        END) AS costo_materiales,
+                        -- Si es empaque, suma al costo de embalaje
+                        SUM(CASE 
+                            WHEN ci.nombre_categoria LIKE '%EMPAQUE%' THEN pi.cantidad * i.precio_insumo 
+                            ELSE 0 
+                        END) AS costo_embalaje
+                    FROM producto_insumo pi
+                    INNER JOIN insumo i ON pi.id_insumo = i.id_insumo
+                    LEFT JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
+                    GROUP BY pi.id_producto
+                )
+                SELECT 
+                    p.id_producto,
+                    p.nombre_producto,
+					          p.utilidad,
+                    pv.costo_despacho,
+                    pv.comision,
+                    pv.monto_envio_gratis,
+                    -- Cálculos finales limpios
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0)) AS joya,
+					          COALESCE(cim.costo_embalaje, 0) AS costo_embalaje,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cim.costo_embalaje, 0)) AS costo_total,
+                    p.precio_venta
+                FROM producto p
+                LEFT JOIN stock_producto sp ON p.id_producto = sp.id_producto
+                LEFT JOIN tipo_producto tp ON p.id_tipo = tp.id_tipo
+                LEFT JOIN costos_cadena cc ON p.id_cadena = cc.id_cadena
+                LEFT JOIN costos_insumos_mixtos cim ON p.id_producto = cim.id_producto
+				        LEFT JOIN plataforma_venta pv ON p.plataforma_venta = pv.id_plataforma
+                WHERE p.id_producto = $1
+    `;
+    const result = await pool.query(query, [idProducto]);
+
+    if (result.rowCount === 0) {
+      return [];
+    }
+    let despacho = Number(result.rows[0].costo_despacho || 0);
+    let comision = Number(result.rows[0].comision || 0);
+    let montoEnvioGratis = Number(result.rows[0].monto_envio_gratis || 0);
+    let costoTotal = Number(result.rows[0].costo_total || 0);
+    let utilidad = Number(result.rows[0].utilidad || 0);
+    let valorUtilidad = (utilidad * costoTotal);
+    let variableCostos = (1/1.19) - comision;
+    let precioVentaEstimado = 0;
+    let preCalculoVenta = ((costoTotal + (costoTotal * utilidad)) / variableCostos);
+    if(preCalculoVenta < montoEnvioGratis){
+      despacho = 0;
+      precioVentaEstimado = preCalculoVenta;
+    } else { precioVentaEstimado = ((costoTotal + (costoTotal * utilidad))+ despacho) / variableCostos;}
+    let neto = precioVentaEstimado / 1.19;
+    let iva = precioVentaEstimado - neto;
+    
+    //Enviar datos filtrados
+    const listaInsumos = result.rows.map(row => ({
+      id_producto: row.id_producto,
+      nombre_producto: row.nombre_producto,
+      utilidad: valorUtilidad,
+      costo_despacho: despacho,
+      comision: row.comision,
+      monto_envio_gratis: row.monto_envio_gratis,
+      joya: row.joya,
+      costo_embalaje: row.costo_embalaje,
+      costo_total: row.costo_total,
+      precio_venta: row.precio_venta,
+      precio_venta_estimado: precioVentaEstimado,
+      neto: neto,
+      iva: iva
+    }));
+    return listaInsumos;
+  }
+
 }
+
+
+
 
 export default new ProductoService();

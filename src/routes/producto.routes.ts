@@ -13,6 +13,7 @@ router.post('/', productoController.create);
 router.put('/:id', productoController.update);
 router.patch('/:id/toggle-publicado-ml', productoController.togglePublicadoML);
 router.put('/:id/publicado-ml', productoController.updatePublicadoML);
+router.get('/costoVenta/:id', productoController.getCostoVenta);
 
 
 // Insumos del producto

@@ -312,6 +312,24 @@ export class ProductoController {
     }
   }
 
+  async getCostoVenta(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const insumos = await productoService.getCostoVenta(Number(id));
+
+      res.json({
+        success: true,
+        data: insumos
+      });
+    } catch (error) {
+      console.error('Error en getCostoVenta:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Error interno del servidor'
+      });
+    }
+  }
+
 }
 
 export default new ProductoController();
