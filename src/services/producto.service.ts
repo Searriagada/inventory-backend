@@ -509,7 +509,7 @@ export class ProductoService {
       id_producto: row.id_producto,
       nombre_producto: row.nombre_producto,
       utilidad: valorUtilidad,
-      costo_despacho: despacho,
+      despacho: despacho,
       comision: row.comision,
       monto_envio_gratis: row.monto_envio_gratis,
       joya: row.joya,
