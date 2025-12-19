@@ -47,12 +47,12 @@ export class ProductoController {
 
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { sku, nombre_producto, descripcion, precio_venta } = req.body;
+      const { sku, nombre_producto, id_tipo_producto, descripcion } = req.body;
 
-      if (!sku || !nombre_producto || precio_venta === undefined) {
+      if (!sku || !nombre_producto || !id_tipo_producto) {
         res.status(400).json({
           success: false,
-          error: 'SKU, nombre y precio de venta son requeridos'
+          error: 'SKU, nombre y tipo de producto son requeridos'
         });
         return;
       }
@@ -69,7 +69,7 @@ export class ProductoController {
       const usuario = req.user?.username || 'system';
 
       const producto = await productoService.create(
-        { sku, nombre_producto, descripcion, precio_venta },
+        { sku, nombre_producto, descripcion, id_tipo_producto },
         usuario
       );
 

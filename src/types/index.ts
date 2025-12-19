@@ -66,7 +66,7 @@ export interface CreateProductoDto {
   sku: string;
   nombre_producto: string;
   descripcion?: string;
-  precio_venta: number;
+  id_tipo_producto: number;
   insumos?: CreateProductoInsumoDto[];
 }
 

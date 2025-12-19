@@ -121,7 +121,7 @@ export class ProductoService {
 
       // Crear el producto
       const productoQuery = `
-      INSERT INTO producto (sku, nombre_producto, descripcion, precio_venta, usuario)
+      INSERT INTO producto (sku, nombre_producto, descripcion, id_tipo, usuario)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
@@ -129,7 +129,7 @@ export class ProductoService {
         data.sku,
         data.nombre_producto,
         data.descripcion || null,
-        data.precio_venta,
+        data.id_tipo_producto,
         usuario
       ]);
       const producto = productoResult.rows[0];
