@@ -47,7 +47,7 @@ export class ProductoController {
 
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { sku, nombre_producto, id_tipo_producto, descripcion } = req.body;
+      const { sku, nombre_producto, id_tipo_producto, descripcion, utilidad, cantidad } = req.body;
 
       if (!sku || !nombre_producto || !id_tipo_producto) {
         res.status(400).json({
@@ -69,7 +69,7 @@ export class ProductoController {
       const usuario = req.user?.username || 'system';
 
       const producto = await productoService.create(
-        { sku, nombre_producto, descripcion, id_tipo_producto },
+        { sku, nombre_producto, descripcion, id_tipo_producto, utilidad, cantidad },
         usuario
       );
 

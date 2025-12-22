@@ -61,15 +61,19 @@ export class ProductoService {
                     p.id_producto,
                     p.sku,
                     p.nombre_producto,
+                    tp.id_tipo,
                     tp.nombre_tipo_producto,
+                    p.utilidad,
                     p.id_cadena,
                     sp.cantidad AS stock_actual,
                     -- Cálculos finales limpios
                     COALESCE(cc.total, 0) AS valor_cadena,
                     (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0)) AS joya,
+                    COALESCE(cim.costo_embalaje, 0) AS costo_embalaje,
                     (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cim.costo_embalaje, 0)) AS costo_total,
                     p.precio_venta,
                     p.publicado_ml,
+                    p.descripcion,
                     p.status
                 FROM producto p
                 LEFT JOIN stock_producto sp ON p.id_producto = sp.id_producto
@@ -84,7 +88,7 @@ export class ProductoService {
       dataParams.push(`%${search}%`);
     }
     if (tipoProducto) {
-      dataQuery += ` AND id_tipo = $${paramIndex++}`;
+      dataQuery += ` AND tp.id_tipo = $${paramIndex++}`;
       dataParams.push(tipoProducto);
     }
 
@@ -121,8 +125,8 @@ export class ProductoService {
 
       // Crear el producto
       const productoQuery = `
-      INSERT INTO producto (sku, nombre_producto, descripcion, id_tipo, usuario)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO producto (sku, nombre_producto, descripcion, id_tipo, utilidad, usuario, plataforma_venta)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
       const productoResult = await client.query(productoQuery, [
@@ -130,21 +134,23 @@ export class ProductoService {
         data.nombre_producto,
         data.descripcion || null,
         data.id_tipo_producto,
-        usuario
+        data.utilidad || null,
+        usuario,
+        1
       ]);
       const producto = productoResult.rows[0];
 
-      // Insertar los insumos asociados
-      if (data.insumos && data.insumos.length > 0) {
-        const insumosQuery = `
-        INSERT INTO producto_insumo (id_producto, id_insumo, cantidad, usuario)
-        VALUES ($1, $2, $3, $4)
-      `;
-
-        for (const insumo of data.insumos) {
-          await client.query(insumosQuery, [producto.id_producto, insumo.id_insumo, insumo.cantidad, usuario]);
-        }
-      }
+      // Crear registro en stock_producto
+      const stockQuery = `
+      INSERT INTO stock_producto (id_producto, cantidad, usuario)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `;
+      await client.query(stockQuery, [
+        producto.id_producto,
+        data.cantidad || 0,
+        usuario
+      ]);
 
       await client.query('COMMIT');
       return producto;
@@ -186,6 +192,10 @@ export class ProductoService {
       if (data.status !== undefined) {
         fields.push(`status = $${paramIndex++}`);
         values.push(data.status);
+      }
+      if (data.utilidad !== undefined) {
+        fields.push(`utilidad = $${paramIndex++}`);
+        values.push(data.utilidad);
       }
 
       fields.push(`usuario = $${paramIndex++}`);
@@ -430,9 +440,9 @@ export class ProductoService {
     return result.rows[0] || null;
   }
 
-  
-// Costos y valor de venta
-   async getCostoVenta(idProducto: number): Promise<any> {
+
+  // Costos y valor de venta
+  async getCostoVenta(idProducto: number): Promise<any> {
     const query =
       `
       WITH costos_cadena AS (
@@ -494,16 +504,16 @@ export class ProductoService {
     let costoTotal = Number(result.rows[0].costo_total || 0);
     let utilidad = Number(result.rows[0].utilidad || 0);
     let valorUtilidad = (utilidad * costoTotal);
-    let variableCostos = (1/1.19) - comision;
+    let variableCostos = (1 / 1.19) - comision;
     let precioVentaEstimado = 0;
     let preCalculoVenta = ((costoTotal + (costoTotal * utilidad)) / variableCostos);
-    if(preCalculoVenta < montoEnvioGratis){
+    if (preCalculoVenta < montoEnvioGratis) {
       despacho = 0;
       precioVentaEstimado = preCalculoVenta;
-    } else { precioVentaEstimado = ((costoTotal + (costoTotal * utilidad))+ despacho) / variableCostos;}
+    } else { precioVentaEstimado = ((costoTotal + (costoTotal * utilidad)) + despacho) / variableCostos; }
     let neto = precioVentaEstimado / 1.19;
     let iva = precioVentaEstimado - neto;
-    
+
     //Enviar datos filtrados
     const listaInsumos = result.rows.map(row => ({
       id_producto: row.id_producto,

@@ -67,7 +67,8 @@ export interface CreateProductoDto {
   nombre_producto: string;
   descripcion?: string;
   id_tipo_producto: number;
-  insumos?: CreateProductoInsumoDto[];
+  utilidad?: number;
+  cantidad?: number;
 }
 
 export interface UpdateProductoDto {
@@ -76,6 +77,7 @@ export interface UpdateProductoDto {
   descripcion?: string;
   precio_venta?: number;
   status?: 'activo' | 'inactivo';
+  utilidad?: number;
   insumos?: CreateProductoInsumoDto[];
 }
 
