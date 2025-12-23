@@ -232,10 +232,10 @@ export class InsumoService {
       `;
 
       const insumoResult = await client.query(insertInsumoQuery, [
-        data.nombre_insumo,
+        data.nombre_insumo?.toUpperCase() ?? null,
         data.id_categoria ?? null,
         data.precio_insumo ?? null,
-        data.link_insumo ?? null,
+        data.link_insumo?.toUpperCase() ?? null,
         usuario
       ]);
 
@@ -266,7 +266,7 @@ export class InsumoService {
 
     if (data.nombre_insumo !== undefined) {
       fields.push(`nombre_insumo = $${paramIndex++}`);
-      values.push(data.nombre_insumo);
+      values.push(data.nombre_insumo.toUpperCase());
     }
     if (data.id_categoria !== undefined) {
       fields.push(`id_categoria = $${paramIndex++}`);

@@ -129,10 +129,13 @@ export class ProductoService {
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
+    // Un pequeño helper para convertir a mayúsculas o null los string
+      const toUpper = (val?: string) => val?.toUpperCase() || null;
+      
       const productoResult = await client.query(productoQuery, [
-        data.sku,
-        data.nombre_producto,
-        data.descripcion || null,
+        toUpper(data.sku),
+        toUpper(data.nombre_producto),
+        toUpper(data.descripcion),
         data.id_tipo_producto,
         data.utilidad || null,
         usuario,
@@ -175,15 +178,15 @@ export class ProductoService {
 
       if (data.sku !== undefined) {
         fields.push(`sku = $${paramIndex++}`);
-        values.push(data.sku);
+        values.push(data.sku.toUpperCase());
       }
       if (data.nombre_producto !== undefined) {
         fields.push(`nombre_producto = $${paramIndex++}`);
-        values.push(data.nombre_producto);
+        values.push(data.nombre_producto.toUpperCase());
       }
       if (data.descripcion !== undefined) {
         fields.push(`descripcion = $${paramIndex++}`);
-        values.push(data.descripcion);
+        values.push(data.descripcion.toUpperCase());
       }
       if (data.precio_venta !== undefined) {
         fields.push(`precio_venta = $${paramIndex++}`);
@@ -505,21 +508,21 @@ export class ProductoService {
     let utilidad = Number(result.rows[0].utilidad || 0);
     let valorUtilidad = (utilidad * costoTotal);
     let variableCostos = (1 / 1.19) - comision;
+    let precioVenta = Number(result.rows[0].precio_venta || 0);
     let precioVentaEstimado = 0;
     let preCalculoVenta = ((costoTotal + (costoTotal * utilidad)) / variableCostos);
     if (preCalculoVenta < montoEnvioGratis) {
-      despacho = 0;
       precioVentaEstimado = preCalculoVenta;
     } else { precioVentaEstimado = ((costoTotal + (costoTotal * utilidad)) + despacho) / variableCostos; }
-    let neto = precioVentaEstimado / 1.19;
-    let iva = precioVentaEstimado - neto;
+    let neto = precioVenta / 1.19;
+    let iva = precioVenta - neto;
 
     //Enviar datos filtrados
     const listaInsumos = result.rows.map(row => ({
       id_producto: row.id_producto,
       nombre_producto: row.nombre_producto,
       utilidad: valorUtilidad,
-      despacho: despacho,
+      despacho: row.costo_despacho,
       comision: row.comision,
       monto_envio_gratis: row.monto_envio_gratis,
       joya: row.joya,
@@ -530,6 +533,7 @@ export class ProductoService {
       neto: neto,
       iva: iva
     }));
+    console.log("Id", result.rows[0].id_producto, "Despacho:", despacho, "Comisión:", comision, "Monto Envío Gratis:", montoEnvioGratis, "Costo Total:", costoTotal, "Utilidad:", utilidad, "Valor Utilidad:", valorUtilidad, "Precio Venta Estimado:", precioVentaEstimado, "Neto:", neto, "IVA:", iva);
     return listaInsumos;
   }
 
