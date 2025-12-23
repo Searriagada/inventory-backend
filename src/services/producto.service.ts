@@ -65,12 +65,13 @@ export class ProductoService {
                     tp.nombre_tipo_producto,
                     p.utilidad,
                     p.id_cadena,
+                    p.costo_fijo,
                     sp.cantidad AS stock_actual,
                     -- Cálculos finales limpios
                     COALESCE(cc.total, 0) AS valor_cadena,
-                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0)) AS joya,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(p.costo_fijo, 0)) AS joya,
                     COALESCE(cim.costo_embalaje, 0) AS costo_embalaje,
-                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cim.costo_embalaje, 0)) AS costo_total,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(p.costo_fijo, 0) + COALESCE(cim.costo_embalaje, 0)) AS costo_total,
                     p.precio_venta,
                     p.publicado_ml,
                     p.descripcion,
@@ -125,8 +126,8 @@ export class ProductoService {
 
       // Crear el producto
       const productoQuery = `
-      INSERT INTO producto (sku, nombre_producto, descripcion, id_tipo, utilidad, usuario, plataforma_venta)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO producto (sku, nombre_producto, descripcion, id_tipo, utilidad, usuario, plataforma_venta, costo_fijo)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
     // Un pequeño helper para convertir a mayúsculas o null los string
@@ -139,7 +140,8 @@ export class ProductoService {
         data.id_tipo_producto,
         data.utilidad || null,
         usuario,
-        1
+        1,
+        data.costo_fijo || null
       ]);
       const producto = productoResult.rows[0];
 
@@ -199,6 +201,10 @@ export class ProductoService {
       if (data.utilidad !== undefined) {
         fields.push(`utilidad = $${paramIndex++}`);
         values.push(data.utilidad);
+      }
+      if (data.costo_fijo !== undefined) {
+        fields.push(`costo_fijo = $${paramIndex++}`);
+        values.push(data.costo_fijo);
       }
 
       fields.push(`usuario = $${paramIndex++}`);
@@ -537,6 +543,59 @@ export class ProductoService {
     return listaInsumos;
   }
 
+  async updateStockProducto(idProducto: number, cantidadMovimiento: number, nota: string, usuario: string): Promise<boolean> {
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    // Obtener el stock actual
+    const stockActualQuery = `
+      SELECT cantidad FROM stock_producto 
+      WHERE id_producto = $1
+    `;
+    const stockResult = await client.query(stockActualQuery, [idProducto]);
+    
+    if (stockResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      throw new Error('Producto no encontrado');
+    }
+
+    const cantidadActual = stockResult.rows[0].cantidad;
+    const cantidadNueva = cantidadActual + cantidadMovimiento;
+
+    // Validar que no quede en negativo
+    if (cantidadNueva < 0) {
+      await client.query('ROLLBACK');
+      throw new Error(`No se pudo llevar a cabo debido a stock insuficiente: ${cantidadActual}`);
+    }
+
+    const tipoTransaccion = cantidadMovimiento > 0 ? 'nuevo_stock' : 'retiro';
+
+    // Actualizar stock
+    const updateQuery = `
+      UPDATE stock_producto 
+      SET cantidad = $1, usuario = $2
+      WHERE id_producto = $3
+    `;
+    await client.query(updateQuery, [cantidadNueva, usuario, idProducto]);
+
+    // Insertar en stock_movement_producto
+    const movementQuery = `
+      INSERT INTO stock_movement_producto (id_producto, tipo_transaccion, nota, usuario)
+      VALUES ($1, $2, $3, $4)
+    `;
+    await client.query(movementQuery, [idProducto, tipoTransaccion, nota, usuario]);
+
+    await client.query('COMMIT');
+    return true;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 }
 
 

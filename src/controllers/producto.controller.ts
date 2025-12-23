@@ -47,7 +47,7 @@ export class ProductoController {
 
   async create(req: AuthRequest, res: Response): Promise<void> {
     try {
-      const { sku, nombre_producto, id_tipo_producto, descripcion, utilidad, cantidad } = req.body;
+      const { sku, nombre_producto, id_tipo_producto, descripcion, utilidad, cantidad, costo_fijo } = req.body;
 
       if (!sku || !nombre_producto || !id_tipo_producto) {
         res.status(400).json({
@@ -69,7 +69,7 @@ export class ProductoController {
       const usuario = req.user?.username || 'system';
 
       const producto = await productoService.create(
-        { sku, nombre_producto, descripcion, id_tipo_producto, utilidad, cantidad },
+        { sku, nombre_producto, descripcion, id_tipo_producto, utilidad, cantidad, costo_fijo },
         usuario
       );
 
@@ -329,6 +329,40 @@ export class ProductoController {
       });
     }
   }
+
+async updateStockProducto(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { cantidad, nota } = req.body;
+    const usuario = req.user?.username || 'system';
+
+    if (typeof cantidad !== 'number') {
+      res.status(400).json({
+        success: false,
+        error: 'Cantidad debe ser un número'
+      });
+      return;
+    }
+
+    const actualizado = await productoService.updateStockProducto(
+      Number(id),
+      cantidad,
+      nota || '',
+      usuario
+    );
+
+    res.json({
+      success: true,
+      message: 'Stock actualizado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error en updateStock producto:', error);
+    res.status(400).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error al actualizar stock'
+    });
+  }
+}
 
 }
 

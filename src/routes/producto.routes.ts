@@ -14,6 +14,7 @@ router.put('/:id', productoController.update);
 router.patch('/:id/toggle-publicado-ml', productoController.togglePublicadoML);
 router.put('/:id/publicado-ml', productoController.updatePublicadoML);
 router.get('/:id/costo', productoController.getCostoVenta);
+router.put('/:id/stock', productoController.updateStockProducto);
 
 
 // Insumos del producto
