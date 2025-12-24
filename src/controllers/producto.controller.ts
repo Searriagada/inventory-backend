@@ -148,7 +148,7 @@ export class ProductoController {
     }
   }
 
-    async getEmbalaje(req: AuthRequest, res: Response): Promise<void> {
+  async getEmbalaje(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const insumos = await productoService.getInsumosEmbalaje(Number(id));
@@ -169,7 +169,7 @@ export class ProductoController {
   async addInsumos(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { insumos, id_cadena } = req.body;
+      const { insumos, id_cadena, productos_insumo } = req.body;
 
       // Validar que insumos sea un array
       if (!Array.isArray(insumos)) {
@@ -181,13 +181,17 @@ export class ProductoController {
       }
 
       const usuario = req.user?.username || 'system';
-      
+
       // Pasar id_cadena al servicio (puede ser null si no se envía)
       const idCadena = id_cadena !== undefined ? id_cadena : null;
-      
+
+      // Asegurar que productos_insumo sea un array (puede venir undefined)
+    const productosInsumo = Array.isArray(productos_insumo) ? productos_insumo : [];
+
       const productoInsumo = await productoService.addInsumos(
         Number(id),
         insumos,
+        productosInsumo,
         idCadena,
         usuario
       );
@@ -203,7 +207,7 @@ export class ProductoController {
     }
   }
 
-    async addEmbalaje(req: AuthRequest, res: Response): Promise<void> {
+  async addEmbalaje(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const { insumos } = req.body;
@@ -218,7 +222,7 @@ export class ProductoController {
       }
 
       const usuario = req.user?.username || 'system';
-      
+
       const productoInsumo = await productoService.addEmbalaje(
         Number(id),
         insumos,
@@ -330,39 +334,60 @@ export class ProductoController {
     }
   }
 
-async updateStockProducto(req: AuthRequest, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
-    const { cantidad, nota } = req.body;
-    const usuario = req.user?.username || 'system';
+  async updateStockProducto(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { cantidad, nota } = req.body;
+      const usuario = req.user?.username || 'system';
 
-    if (typeof cantidad !== 'number') {
+      if (typeof cantidad !== 'number') {
+        res.status(400).json({
+          success: false,
+          error: 'Cantidad debe ser un número'
+        });
+        return;
+      }
+
+      const actualizado = await productoService.updateStockProducto(
+        Number(id),
+        cantidad,
+        nota || '',
+        usuario
+      );
+
+      res.json({
+        success: true,
+        message: 'Stock actualizado exitosamente'
+      });
+    } catch (error) {
+      console.error('Error en updateStock producto:', error);
       res.status(400).json({
         success: false,
-        error: 'Cantidad debe ser un número'
+        error: error instanceof Error ? error.message : 'Error al actualizar stock'
       });
-      return;
     }
-
-    const actualizado = await productoService.updateStockProducto(
-      Number(id),
-      cantidad,
-      nota || '',
-      usuario
-    );
-
-    res.json({
-      success: true,
-      message: 'Stock actualizado exitosamente'
-    });
-  } catch (error) {
-    console.error('Error en updateStock producto:', error);
-    res.status(400).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Error al actualizar stock'
-    });
   }
-}
+  async findAllProductoAsInsumo(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const search = req.query.search as string;
+      const resultado = await productoService.findAllProductoAsInsumo(search);
+      res.json({ success: true, data: resultado });
+    } catch (error) {
+      console.error('Error en findAll producto as insumo:', error);
+      res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    }
+  }
+
+  async findProductoAsInsumoById(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const resultado = await productoService.findProductoInsumoById(Number(id));
+      res.json({ success: true, data: resultado });
+    } catch (error) {
+      console.error('Error en findById producto as insumo:', error);
+      res.status(500).json({ success: false, error: 'Error interno del servidor' });
+    }
+  }
 
 }
 

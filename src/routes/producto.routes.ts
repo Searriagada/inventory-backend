@@ -23,4 +23,8 @@ router.put('/:id/insumos', productoController.addInsumos);
 router.get('/:id/embalajes', productoController.getEmbalaje);
 router.put('/:id/embalajes', productoController.addEmbalaje);
 
+// Obtener todos los productos como insumos
+router.get('/as-insumos/all', productoController.findAllProductoAsInsumo);
+router.get('/as-insumos/:id', productoController.findProductoAsInsumoById);
+
 export default router;

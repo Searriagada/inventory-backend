@@ -56,7 +56,15 @@ export class ProductoService {
                     INNER JOIN insumo i ON pi.id_insumo = i.id_insumo
                     LEFT JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
                     GROUP BY pi.id_producto
-                )
+                ),
+				costo_producto_insumo AS (
+					SELECT 
+						pai.id_producto, 
+						SUM(p.costo_fijo * pai.cantidad) AS total
+					FROM producto_as_insumo pai 
+					INNER JOIN producto p ON pai.id_producto_as_insumo = p.id_producto
+					GROUP BY pai.id_producto
+				)
                 SELECT 
                     p.id_producto,
                     p.sku,
@@ -65,22 +73,24 @@ export class ProductoService {
                     tp.nombre_tipo_producto,
                     p.utilidad,
                     p.id_cadena,
-                    p.costo_fijo,
                     sp.cantidad AS stock_actual,
                     -- Cálculos finales limpios
                     COALESCE(cc.total, 0) AS valor_cadena,
-                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(p.costo_fijo, 0)) AS joya,
+					COALESCE(cpi.total, 0) AS costo_fijo,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cpi.total, 0) + COALESCE(p.costo_fijo, 0)) AS joya,
                     COALESCE(cim.costo_embalaje, 0) AS costo_embalaje,
-                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(p.costo_fijo, 0) + COALESCE(cim.costo_embalaje, 0)) AS costo_total,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cim.costo_embalaje, 0) + COALESCE(cpi.total, 0) + COALESCE(p.costo_fijo, 0)) AS costo_total,
                     p.precio_venta,
                     p.publicado_ml,
                     p.descripcion,
+                    p.costo_fijo,
                     p.status
                 FROM producto p
                 LEFT JOIN stock_producto sp ON p.id_producto = sp.id_producto
                 LEFT JOIN tipo_producto tp ON p.id_tipo = tp.id_tipo
                 LEFT JOIN costos_cadena cc ON p.id_cadena = cc.id_cadena
                 LEFT JOIN costos_insumos_mixtos cim ON p.id_producto = cim.id_producto
+				LEFT JOIN costo_producto_insumo cpi ON p.id_producto = cpi.id_producto
                 WHERE p.status = 'activo'`;
     const dataParams: any[] = [];
     let paramIndex = 1;
@@ -130,9 +140,9 @@ export class ProductoService {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
-    // Un pequeño helper para convertir a mayúsculas o null los string
+      // Un pequeño helper para convertir a mayúsculas o null los string
       const toUpper = (val?: string) => val?.toUpperCase() || null;
-      
+
       const productoResult = await client.query(productoQuery, [
         toUpper(data.sku),
         toUpper(data.nombre_producto),
@@ -316,6 +326,7 @@ export class ProductoService {
   async addInsumos(
     idProducto: number,
     insumos: { id_insumo: number; cantidad: number }[],
+    productos_insumo: { cantidad: number; id_producto_as_insumo: number }[],
     idCadena: number | null,
     usuario: string
   ): Promise<any> {
@@ -352,6 +363,24 @@ export class ProductoService {
 
       const resultadosQuery = await Promise.all(insertPromises);
       const resultados = resultadosQuery.map(r => r.rows[0]);
+
+      await client.query(
+        'DELETE FROM producto_as_insumo WHERE id_producto = $1',
+        [idProducto]
+      );
+
+      if (productos_insumo && productos_insumo.length > 0) {
+        const insertProductosPromises = productos_insumo.map(prod => {
+          return client.query(
+            `INSERT INTO producto_as_insumo (id_producto, id_producto_as_insumo, cantidad)
+           VALUES ($1, $2, $3)
+           RETURNING *`,
+            [idProducto, prod.id_producto_as_insumo, prod.cantidad]
+          );
+        });
+
+        await Promise.all(insertProductosPromises);
+      }
 
       await client.query('COMMIT');
       return resultados;
@@ -481,6 +510,14 @@ export class ProductoService {
                     INNER JOIN insumo i ON pi.id_insumo = i.id_insumo
                     LEFT JOIN categoria_insumo ci ON i.id_categoria = ci.id_categoria
                     GROUP BY pi.id_producto
+                ),
+                costo_producto_insumo AS (
+                  SELECT 
+                    pai.id_producto, 
+                    SUM(p.costo_fijo * pai.cantidad) AS total
+                  FROM producto_as_insumo pai 
+                  INNER JOIN producto p ON pai.id_producto_as_insumo = p.id_producto
+                  GROUP BY pai.id_producto
                 )
                 SELECT 
                     p.id_producto,
@@ -490,9 +527,9 @@ export class ProductoService {
                     pv.comision,
                     pv.monto_envio_gratis,
                     -- Cálculos finales limpios
-                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0)) AS joya,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cpi.total, 0) + COALESCE(p.costo_fijo, 0)) AS joya,
 					          COALESCE(cim.costo_embalaje, 0) AS costo_embalaje,
-                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cim.costo_embalaje, 0)) AS costo_total,
+                    (COALESCE(cc.total, 0) + COALESCE(cim.costo_materiales, 0) + COALESCE(cim.costo_embalaje, 0) + COALESCE(cpi.total, 0) + COALESCE(p.costo_fijo, 0)) AS costo_total,
                     p.precio_venta
                 FROM producto p
                 LEFT JOIN stock_producto sp ON p.id_producto = sp.id_producto
@@ -500,6 +537,7 @@ export class ProductoService {
                 LEFT JOIN costos_cadena cc ON p.id_cadena = cc.id_cadena
                 LEFT JOIN costos_insumos_mixtos cim ON p.id_producto = cim.id_producto
 				        LEFT JOIN plataforma_venta pv ON p.plataforma_venta = pv.id_plataforma
+                LEFT JOIN costo_producto_insumo cpi ON p.id_producto = cpi.id_producto
                 WHERE p.id_producto = $1
     `;
     const result = await pool.query(query, [idProducto]);
@@ -544,58 +582,89 @@ export class ProductoService {
   }
 
   async updateStockProducto(idProducto: number, cantidadMovimiento: number, nota: string, usuario: string): Promise<boolean> {
-  const client = await pool.connect();
+    const client = await pool.connect();
 
-  try {
-    await client.query('BEGIN');
+    try {
+      await client.query('BEGIN');
 
-    // Obtener el stock actual
-    const stockActualQuery = `
+      // Obtener el stock actual
+      const stockActualQuery = `
       SELECT cantidad FROM stock_producto 
       WHERE id_producto = $1
     `;
-    const stockResult = await client.query(stockActualQuery, [idProducto]);
-    
-    if (stockResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      throw new Error('Producto no encontrado');
-    }
+      const stockResult = await client.query(stockActualQuery, [idProducto]);
 
-    const cantidadActual = stockResult.rows[0].cantidad;
-    const cantidadNueva = cantidadActual + cantidadMovimiento;
+      if (stockResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        throw new Error('Producto no encontrado');
+      }
 
-    // Validar que no quede en negativo
-    if (cantidadNueva < 0) {
-      await client.query('ROLLBACK');
-      throw new Error(`No se pudo llevar a cabo debido a stock insuficiente: ${cantidadActual}`);
-    }
+      const cantidadActual = stockResult.rows[0].cantidad;
+      const cantidadNueva = cantidadActual + cantidadMovimiento;
 
-    const tipoTransaccion = cantidadMovimiento > 0 ? 'nuevo_stock' : 'retiro';
+      // Validar que no quede en negativo
+      if (cantidadNueva < 0) {
+        await client.query('ROLLBACK');
+        throw new Error(`No se pudo llevar a cabo debido a stock insuficiente: ${cantidadActual}`);
+      }
 
-    // Actualizar stock
-    const updateQuery = `
+      const tipoTransaccion = cantidadMovimiento > 0 ? 'nuevo_stock' : 'retiro';
+
+      // Actualizar stock
+      const updateQuery = `
       UPDATE stock_producto 
       SET cantidad = $1, usuario = $2
       WHERE id_producto = $3
     `;
-    await client.query(updateQuery, [cantidadNueva, usuario, idProducto]);
+      await client.query(updateQuery, [cantidadNueva, usuario, idProducto]);
 
-    // Insertar en stock_movement_producto
-    const movementQuery = `
+      // Insertar en stock_movement_producto
+      const movementQuery = `
       INSERT INTO stock_movement_producto (id_producto, tipo_transaccion, nota, usuario)
       VALUES ($1, $2, $3, $4)
     `;
-    await client.query(movementQuery, [idProducto, tipoTransaccion, nota, usuario]);
+      await client.query(movementQuery, [idProducto, tipoTransaccion, nota, usuario]);
 
-    await client.query('COMMIT');
-    return true;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
-}
+
+  async findAllProductoAsInsumo(search?: string) {
+    let query = `
+    SELECT id_producto, sku, nombre_producto, costo_fijo 
+    FROM producto
+    WHERE costo_fijo > 0
+  `;
+
+    const params: any[] = [];
+
+    if (search) {
+      query += ` AND nombre_producto ILIKE $1`;
+      params.push(`%${search}%`);
+    }
+
+    query += ` ORDER BY nombre_producto`;
+
+    const result = await pool.query(query, params);
+    return result.rows;
+  }
+
+  async findProductoInsumoById(id: number) {
+    const query = `
+      SELECT p.nombre_producto,pi.id_producto_as_insumo, pi.cantidad,p.costo_fijo 
+      FROM producto_as_insumo pi 
+      INNER JOIN producto p ON pi.id_producto_as_insumo = p.id_producto
+      WHERE pi.id_producto = $1 
+    `;
+    const result = await pool.query(query, [id]);
+    return result.rows;
+  }
 }
 
 
