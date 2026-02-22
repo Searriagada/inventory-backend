@@ -19,4 +19,8 @@ pool.on('error', (err) => {
   process.exit(-1);
 });
 
+dotenv.config();
+
+console.log('DATABASE_URL:', process.env.DATABASE_URL); // línea temporal
+
 export default pool;
